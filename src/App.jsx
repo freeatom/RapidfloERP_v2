@@ -5,8 +5,14 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 const API = '/api';
 async function api(path, options = {}) {
     const token = localStorage.getItem('erp_token');
+    const companyId = localStorage.getItem('erp_company_id');
     const config = {
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(companyId ? { 'X-Company-Id': companyId } : {}),
+            ...options.headers
+        },
         ...options,
     };
     if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
@@ -16,6 +22,7 @@ async function api(path, options = {}) {
     if (res.status === 401) {
         localStorage.removeItem('erp_token');
         localStorage.removeItem('erp_user');
+        localStorage.removeItem('erp_company_id');
         window.location.href = '/login';
         throw new Error('Session expired');
     }
@@ -47,19 +54,41 @@ function AuthProvider({ children }) {
         const data = await api('/auth/login', { method: 'POST', body: { email, password } });
         localStorage.setItem('erp_token', data.token);
         localStorage.setItem('erp_user', JSON.stringify(data.user));
+        // SuperAdmin does NOT auto-set company — they must pick one via company gate
+        if (data.user.isSuperAdmin) {
+            localStorage.removeItem('erp_company_id');
+        } else if (data.user.companyId) {
+            localStorage.setItem('erp_company_id', data.user.companyId);
+        }
         setUser(data.user);
         return data;
+    };
+
+    const switchCompany = (companyId) => {
+        localStorage.setItem('erp_company_id', companyId);
+        window.location.reload();
+    };
+
+    const enterCompany = (companyId) => {
+        localStorage.setItem('erp_company_id', companyId);
+        window.location.reload(); // Reload to re-fetch everything with company header
+    };
+
+    const exitCompany = () => {
+        localStorage.removeItem('erp_company_id');
+        window.location.href = '/'; // Go to root, will show company gate
     };
 
     const logout = async () => {
         try { await api('/auth/logout', { method: 'POST' }); } catch { }
         localStorage.removeItem('erp_token');
         localStorage.removeItem('erp_user');
+        localStorage.removeItem('erp_company_id');
         setUser(null);
     };
 
     if (loading) return <div className="loading-overlay"><div className="spinner"></div><span>Loading Rapidflo...</span></div>;
-    return <AuthContext.Provider value={{ user, login, logout, isAuth: !!user }}>{children}</AuthContext.Provider>;
+    return <AuthContext.Provider value={{ user, login, logout, switchCompany, enterCompany, exitCompany, isAuth: !!user }}>{children}</AuthContext.Provider>;
 }
 
 // === Toast Context ===
@@ -111,6 +140,7 @@ import AdminPage from './pages/Admin';
 import WorkflowsPage from './pages/Workflows';
 import ScannerPage from './pages/Scanner';
 import ProfilePage from './pages/Profile';
+import CompanyAdminPage from './pages/CompanyAdmin';
 
 // === App Component ===
 function App() {
@@ -135,6 +165,7 @@ function App() {
                             <Route path="workflows/*" element={<WorkflowsPage />} />
                             <Route path="scanner/*" element={<ScannerPage />} />
                             <Route path="profile" element={<ProfilePage />} />
+                            <Route path="companies/*" element={<CompanyAdminPage />} />
                         </Route>
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

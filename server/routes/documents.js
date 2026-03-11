@@ -32,7 +32,7 @@ const upload = multer({
 
 // Upload document
 router.post('/upload', upload.single('file'), auditLog('documents', 'UPLOAD'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded or file type not allowed' });
     const { resource_type, resource_id, description } = req.body;
     if (!resource_type || !resource_id) return res.status(400).json({ error: 'resource_type and resource_id required' });
@@ -45,7 +45,7 @@ router.post('/upload', upload.single('file'), auditLog('documents', 'UPLOAD'), (
 
 // List documents for a resource
 router.get('/', (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { resource_type, resource_id } = req.query;
     if (!resource_type || !resource_id) return res.status(400).json({ error: 'resource_type and resource_id required' });
     const docs = db.prepare(`SELECT d.*, u.first_name || ' ' || u.last_name as uploaded_by_name
@@ -57,7 +57,7 @@ router.get('/', (req, res) => {
 
 // Download document
 router.get('/:id/download', (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const doc = db.prepare('SELECT * FROM documents WHERE id=? AND is_deleted=0').get(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
     const filePath = path.join(uploadDir, doc.filename);
@@ -69,7 +69,7 @@ router.get('/:id/download', (req, res) => {
 
 // Delete document (soft delete)
 router.delete('/:id', auditLog('documents', 'DELETE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const doc = db.prepare('SELECT * FROM documents WHERE id=?').get(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
     db.prepare("UPDATE documents SET is_deleted=1, updated_at=datetime('now') WHERE id=?").run(req.params.id);

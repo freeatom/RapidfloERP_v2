@@ -1,11 +1,14 @@
 /**
  * Middleware: checkModuleEnabled
- * Blocks API requests to disabled modules based on module_config table.
+ * Checks module_config in company DB (per-company module settings)
  */
 export function checkModuleEnabled(moduleName) {
     return (req, res, next) => {
         try {
-            const db = req.app.get('db');
+            // Use company DB for module config (each company has its own)
+            const db = req.companyDb;
+            if (!db) return next(); // No company context = allow (SuperAdmin at gate)
+
             const mod = db.prepare(
                 'SELECT is_enabled FROM module_config WHERE module = ?'
             ).get(moduleName);
@@ -23,7 +26,7 @@ export function checkModuleEnabled(moduleName) {
             next();
         } catch (err) {
             console.error('Module check error:', err);
-            next(); // Fail open on error to avoid blocking everything
+            next(); // Fail open on error
         }
     };
 }

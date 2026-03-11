@@ -6,7 +6,7 @@ const router = Router();
 
 // === TICKETS ===
 router.get('/tickets', checkPermission('support', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, priority, assigned_to, category } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -29,7 +29,7 @@ router.get('/tickets', checkPermission('support', 'view'), (req, res) => {
 });
 
 router.get('/tickets/:id', checkPermission('support', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const ticket = db.prepare(`SELECT t.*,a.name as account_name,c.first_name||' '||c.last_name as contact_name,u.first_name||' '||u.last_name as agent_name FROM tickets t LEFT JOIN accounts a ON a.id=t.account_id LEFT JOIN contacts c ON c.id=t.contact_id LEFT JOIN users u ON u.id=t.assigned_to WHERE t.id=?`).get(req.params.id);
     if (!ticket) return res.status(404).json({ error: 'Not found' });
     ticket.comments = db.prepare(`SELECT tc.*,u.first_name||' '||u.last_name as author_name FROM ticket_comments tc LEFT JOIN users u ON u.id=tc.user_id WHERE tc.ticket_id=? ORDER BY tc.created_at`).all(req.params.id);
@@ -38,7 +38,7 @@ router.get('/tickets/:id', checkPermission('support', 'view'), (req, res) => {
 });
 
 router.post('/tickets', checkPermission('support', 'create'), auditLog('support', 'CREATE_TICKET'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.subject) return res.status(400).json({ error: 'Subject required' });
     const ticketNum = `TKT-${Date.now().toString(36).toUpperCase()}`;
@@ -57,7 +57,7 @@ router.post('/tickets', checkPermission('support', 'create'), auditLog('support'
 });
 
 router.put('/tickets/:id', checkPermission('support', 'edit'), auditLog('support', 'UPDATE_TICKET'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const ticket = db.prepare('SELECT * FROM tickets WHERE id=?').get(req.params.id);
     if (!ticket) return res.status(404).json({ error: 'Not found' });
     const fields = ['subject', 'description', 'status', 'priority', 'type', 'category', 'assigned_to', 'sla_policy_id', 'csat_score', 'csat_comment'];
@@ -86,7 +86,7 @@ router.put('/tickets/:id', checkPermission('support', 'edit'), auditLog('support
 });
 
 router.delete('/tickets/:id', checkPermission('support', 'delete'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     db.prepare('DELETE FROM ticket_comments WHERE ticket_id=?').run(req.params.id);
     db.prepare('DELETE FROM tickets WHERE id=?').run(req.params.id);
     res.json({ success: true });
@@ -94,7 +94,7 @@ router.delete('/tickets/:id', checkPermission('support', 'delete'), (req, res) =
 
 // === TICKET COMMENTS ===
 router.post('/tickets/:id/comments', checkPermission('support', 'create'), auditLog('support', 'ADD_COMMENT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.content) return res.status(400).json({ error: 'Content required' });
     db.prepare(`INSERT INTO ticket_comments (id,ticket_id,user_id,content,type,is_internal,created_at) VALUES (?,?,?,?,?,?,datetime('now'))`).run(id, req.params.id, req.user.id, b.content, b.type || 'reply', b.is_internal || 0);
@@ -108,11 +108,11 @@ router.post('/tickets/:id/comments', checkPermission('support', 'create'), audit
 
 // === SLA POLICIES ===
 router.get('/sla-policies', checkPermission('support', 'view'), (req, res) => {
-    res.json({ policies: req.app.get('db').prepare('SELECT * FROM sla_policies ORDER BY first_response_hours').all() });
+    res.json({ policies: req.companyDb.prepare('SELECT * FROM sla_policies ORDER BY first_response_hours').all() });
 });
 
 router.post('/sla-policies', checkPermission('support', 'create'), auditLog('support', 'CREATE_SLA'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     db.prepare(`INSERT INTO sla_policies (id,name,description,priority,first_response_hours,resolution_hours,escalation_hours,is_active,business_hours_only,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.name, b.description, b.priority, b.first_response_hours || 4, b.resolution_hours || 24, b.escalation_hours || 8, b.is_active ?? 1, b.business_hours_only ?? 1);
     res.status(201).json(db.prepare('SELECT * FROM sla_policies WHERE id=?').get(id));
@@ -120,7 +120,7 @@ router.post('/sla-policies', checkPermission('support', 'create'), auditLog('sup
 
 // === KNOWLEDGE BASE ===
 router.get('/knowledge', checkPermission('support', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { search, category, status } = req.query;
     let where = ['1=1'], params = [];
     if (search) { where.push("(title LIKE ? OR content LIKE ?)"); const s = `%${search}%`; params.push(s, s); }
@@ -131,7 +131,7 @@ router.get('/knowledge', checkPermission('support', 'view'), (req, res) => {
 });
 
 router.post('/knowledge', checkPermission('support', 'create'), auditLog('support', 'CREATE_ARTICLE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.title || !b.content) return res.status(400).json({ error: 'Title and content required' });
     db.prepare(`INSERT INTO knowledge_articles (id,title,content,category,tags,status,author_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.title, b.content, b.category, JSON.stringify(b.tags || []), b.status || 'draft', req.user.id);
@@ -140,7 +140,7 @@ router.post('/knowledge', checkPermission('support', 'create'), auditLog('suppor
 });
 
 router.put('/knowledge/:id', checkPermission('support', 'edit'), auditLog('support', 'UPDATE_ARTICLE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['title', 'content', 'category', 'status'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -153,13 +153,13 @@ router.put('/knowledge/:id', checkPermission('support', 'edit'), auditLog('suppo
 
 // Increment article views
 router.post('/knowledge/:id/view', (req, res) => {
-    req.app.get('db').prepare('UPDATE knowledge_articles SET views=views+1 WHERE id=?').run(req.params.id);
+    req.companyDb.prepare('UPDATE knowledge_articles SET views=views+1 WHERE id=?').run(req.params.id);
     res.json({ success: true });
 });
 
 // Feedback
 router.post('/knowledge/:id/feedback', (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const field = req.body.helpful ? 'helpful_count' : 'not_helpful_count';
     db.prepare(`UPDATE knowledge_articles SET ${field}=${field}+1 WHERE id=?`).run(req.params.id);
     res.json({ success: true });
@@ -167,7 +167,7 @@ router.post('/knowledge/:id/feedback', (req, res) => {
 
 // === STATS ===
 router.get('/stats', checkPermission('support', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const openTickets = db.prepare("SELECT COUNT(*) as v FROM tickets WHERE status IN ('open','in_progress')").get().v;
     const criticalTickets = db.prepare("SELECT COUNT(*) as v FROM tickets WHERE priority='critical' AND status NOT IN ('resolved','closed')").get().v;
     const avgResolution = db.prepare("SELECT COALESCE(AVG(CAST((julianday(resolved_at)-julianday(created_at))*24 AS INTEGER)),0) as v FROM tickets WHERE resolved_at IS NOT NULL").get().v;

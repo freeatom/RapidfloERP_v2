@@ -6,13 +6,13 @@ const router = Router();
 
 // === WAREHOUSES ===
 router.get('/warehouses', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const warehouses = db.prepare(`SELECT w.*, u.first_name||' '||u.last_name as manager_name FROM warehouses w LEFT JOIN users u ON u.id=w.manager_id ORDER BY w.name`).all();
     res.json({ warehouses });
 });
 
 router.post('/warehouses', checkPermission('inventory', 'create'), auditLog('inventory', 'CREATE_WAREHOUSE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     db.prepare(`INSERT INTO warehouses (id,name,code,address,city,state,country,manager_id,type,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.name, b.code || `WH-${Date.now().toString(36).toUpperCase().slice(-4)}`, b.address, b.city, b.state, b.country || 'India', b.manager_id, b.type || 'main');
     res.status(201).json(db.prepare('SELECT * FROM warehouses WHERE id=?').get(id));
@@ -20,7 +20,7 @@ router.post('/warehouses', checkPermission('inventory', 'create'), auditLog('inv
 
 // === STOCK LEVELS ===
 router.get('/stock', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { search, warehouse_id, low_stock } = req.query;
     let where = ['1=1'], params = [];
     if (search) { where.push("(p.name LIKE ? OR p.sku LIKE ?)"); const s = `%${search}%`; params.push(s, s); }
@@ -33,7 +33,7 @@ router.get('/stock', checkPermission('inventory', 'view'), (req, res) => {
 
 // === STOCK MOVEMENTS ===
 router.get('/movements', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, product_id, type, warehouse_id } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -46,7 +46,7 @@ router.get('/movements', checkPermission('inventory', 'view'), (req, res) => {
 });
 
 router.post('/movements', checkPermission('inventory', 'create'), auditLog('inventory', 'CREATE_MOVEMENT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.product_id || !b.type || !b.quantity) return res.status(400).json({ error: 'Product, type, and quantity required' });
     db.prepare(`INSERT INTO stock_movements (id,product_id,warehouse_id,to_warehouse_id,type,quantity,unit_cost,reference_type,reference_id,batch_number,reason,notes,movement_date,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`).run(id, b.product_id, b.warehouse_id, b.to_warehouse_id, b.type, b.quantity, b.unit_cost || 0, b.reference_type, b.reference_id, b.batch_number, b.reason, b.notes, b.movement_date || new Date().toISOString(), req.user.id);
@@ -70,7 +70,7 @@ router.post('/movements', checkPermission('inventory', 'create'), auditLog('inve
 
 // === PURCHASE ORDERS ===
 router.get('/purchase-orders', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, status, vendor_id } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -82,7 +82,7 @@ router.get('/purchase-orders', checkPermission('inventory', 'view'), (req, res) 
 });
 
 router.get('/purchase-orders/:id', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const po = db.prepare('SELECT po.*,v.name as vendor_name FROM purchase_orders po LEFT JOIN vendors v ON v.id=po.vendor_id WHERE po.id=?').get(req.params.id);
     if (!po) return res.status(404).json({ error: 'Not found' });
     po.items = db.prepare('SELECT pi.*,p.name as product_name FROM po_items pi LEFT JOIN products p ON p.id=pi.product_id WHERE pi.po_id=?').all(req.params.id);
@@ -90,7 +90,7 @@ router.get('/purchase-orders/:id', checkPermission('inventory', 'view'), (req, r
 });
 
 router.post('/purchase-orders', checkPermission('inventory', 'create'), auditLog('inventory', 'CREATE_PO'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     const poNum = `PO-${Date.now().toString(36).toUpperCase()}`;
     db.prepare(`INSERT INTO purchase_orders (id,po_number,vendor_id,warehouse_id,status,currency,order_date,expected_date,payment_terms,shipping_method,notes,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, poNum, b.vendor_id, b.warehouse_id, b.status || 'draft', b.currency || 'INR', b.order_date || new Date().toISOString().split('T')[0], b.expected_date, b.payment_terms || 'net30', b.shipping_method, b.notes, req.user.id);
@@ -108,7 +108,7 @@ router.post('/purchase-orders', checkPermission('inventory', 'create'), auditLog
 });
 
 router.put('/purchase-orders/:id', checkPermission('inventory', 'edit'), auditLog('inventory', 'UPDATE_PO'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['status', 'expected_date', 'notes', 'payment_terms'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -145,14 +145,14 @@ router.put('/purchase-orders/:id', checkPermission('inventory', 'edit'), auditLo
 
 // === INVENTORY PRODUCTS (aggregated view) ===
 router.get('/products', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const products = db.prepare(`SELECT p.*, COALESCE(SUM(sl.quantity),0) as total_stock, COALESCE(SUM(sl.available_quantity),0) as available_stock, COALESCE(SUM(sl.total_value),0) as stock_value FROM products p LEFT JOIN stock_levels sl ON sl.product_id=p.id WHERE p.is_stockable=1 GROUP BY p.id ORDER BY p.name`).all();
     res.json({ products });
 });
 
 // === STATS ===
 router.get('/stats', checkPermission('inventory', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const totalSKUs = db.prepare("SELECT COUNT(*) as v FROM products WHERE is_active=1 AND is_stockable=1").get().v;
     const lowStock = db.prepare("SELECT COUNT(DISTINCT p.id) as v FROM products p LEFT JOIN stock_levels sl ON sl.product_id=p.id WHERE p.is_stockable=1 AND COALESCE(sl.available_quantity,0) < p.min_stock_level").get().v;
     const stockValue = db.prepare("SELECT COALESCE(SUM(sl.available_quantity * p.cost_price),0) as v FROM stock_levels sl LEFT JOIN products p ON p.id=sl.product_id").get().v;

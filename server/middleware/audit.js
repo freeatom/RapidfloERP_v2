@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 // Immutable audit logging middleware
-// Captures: user, action, module, resource, old/new values, IP, user agent, session, duration
+// Logs to the company DB's audit_logs table (per-company audit trail)
 
 export function auditLog(module, action, options = {}) {
     return (req, res, next) => {
@@ -11,10 +11,12 @@ export function auditLog(module, action, options = {}) {
         res.json = function (body) {
             const duration = Date.now() - startTime;
 
-            // Only log successful mutations or explicit audit events
             if (res.statusCode < 400 || options.logErrors) {
                 try {
-                    const db = req.app.get('db');
+                    // Use company DB for audit, fall back to main DB
+                    const db = req.companyDb || req.app.get('db');
+                    const tableName = req.companyDb ? 'audit_logs' : 'platform_audit_logs';
+
                     const logEntry = {
                         id: uuidv4(),
                         user_id: req.user?.id || null,
@@ -34,11 +36,11 @@ export function auditLog(module, action, options = {}) {
                     };
 
                     db.prepare(`
-            INSERT INTO audit_logs (id, user_id, user_email, action, module, resource_type, resource_id, 
-              old_values, new_values, ip_address, user_agent, session_id, status, error_message, duration_ms, created_at)
-            VALUES (@id, @user_id, @user_email, @action, @module, @resource_type, @resource_id, 
-              @old_values, @new_values, @ip_address, @user_agent, @session_id, @status, @error_message, @duration_ms, datetime('now'))
-          `).run(logEntry);
+                        INSERT INTO ${tableName} (id, user_id, user_email, action, module, resource_type, resource_id, 
+                          old_values, new_values, ip_address, user_agent, ${req.companyDb ? 'session_id,' : ''} status, error_message, duration_ms, created_at)
+                        VALUES (@id, @user_id, @user_email, @action, @module, @resource_type, @resource_id, 
+                          @old_values, @new_values, @ip_address, @user_agent, ${req.companyDb ? '@session_id,' : ''} @status, @error_message, @duration_ms, datetime('now'))
+                    `).run(logEntry);
                 } catch (err) {
                     console.error('Audit log error:', err.message);
                 }
@@ -51,41 +53,36 @@ export function auditLog(module, action, options = {}) {
     };
 }
 
-// Capture old values before update/delete for audit trail
+// Capture old values before update/delete
 export function captureOldValues(tableName, idParam = 'id') {
     return (req, res, next) => {
         try {
-            const db = req.app.get('db');
+            const db = req.companyDb || req.app.get('db');
             const id = req.params[idParam] || req.params.id;
             if (id) {
                 const oldRecord = db.prepare(`SELECT * FROM ${tableName} WHERE id = ?`).get(id);
-                if (oldRecord) {
-                    req._auditOldValues = oldRecord;
-                }
+                if (oldRecord) req._auditOldValues = oldRecord;
             }
         } catch (err) {
-            // Don't block the request if audit capture fails
             console.error('Audit capture error:', err.message);
         }
         next();
     };
 }
 
-// Set new values for audit trail
 export function setAuditNewValues(data) {
     return function (req) {
         req._auditNewValues = data || req.body;
     };
 }
 
-// Direct audit log function (for non-middleware usage)
 export function logAuditEvent(db, { userId, userEmail, action, module, resourceType, resourceId, oldValues, newValues, ipAddress, userAgent }) {
     try {
         db.prepare(`
-      INSERT INTO audit_logs (id, user_id, user_email, action, module, resource_type, resource_id, 
-        old_values, new_values, ip_address, user_agent, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', datetime('now'))
-    `).run(
+            INSERT INTO audit_logs (id, user_id, user_email, action, module, resource_type, resource_id, 
+              old_values, new_values, ip_address, user_agent, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', datetime('now'))
+        `).run(
             uuidv4(), userId, userEmail, action, module, resourceType, resourceId,
             oldValues ? JSON.stringify(oldValues) : null,
             newValues ? JSON.stringify(newValues) : null,

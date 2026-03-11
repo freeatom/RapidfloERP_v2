@@ -6,7 +6,7 @@ const router = Router();
 
 // === VENDORS ===
 router.get('/vendors', checkPermission('procurement', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, category } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -19,7 +19,7 @@ router.get('/vendors', checkPermission('procurement', 'view'), (req, res) => {
 });
 
 router.get('/vendors/:id', checkPermission('procurement', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const vendor = db.prepare('SELECT * FROM vendors WHERE id=?').get(req.params.id);
     if (!vendor) return res.status(404).json({ error: 'Not found' });
     vendor.contacts = db.prepare('SELECT * FROM vendor_contacts WHERE vendor_id=?').all(req.params.id);
@@ -28,7 +28,7 @@ router.get('/vendors/:id', checkPermission('procurement', 'view'), (req, res) =>
 });
 
 router.post('/vendors', checkPermission('procurement', 'create'), auditLog('procurement', 'CREATE_VENDOR'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.name) return res.status(400).json({ error: 'Name required' });
     db.prepare(`INSERT INTO vendors (id,name,code,email,phone,website,address,city,state,country,postal_code,tax_id,payment_terms,currency,rating,status,category,bank_name,bank_account,ifsc_code,notes,tags,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.name, b.code || `V-${Date.now().toString(36).toUpperCase().slice(-5)}`, b.email, b.phone, b.website, b.address, b.city, b.state, b.country || 'India', b.postal_code, b.tax_id, b.payment_terms || 'net30', b.currency || 'INR', b.rating || 3, b.status || 'active', b.category, b.bank_name, b.bank_account, b.ifsc_code, b.notes, JSON.stringify(b.tags || []), req.user.id);
@@ -36,7 +36,7 @@ router.post('/vendors', checkPermission('procurement', 'create'), auditLog('proc
 });
 
 router.put('/vendors/:id', checkPermission('procurement', 'edit'), auditLog('procurement', 'UPDATE_VENDOR'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['name', 'code', 'email', 'phone', 'website', 'address', 'city', 'state', 'country', 'postal_code', 'tax_id', 'payment_terms', 'currency', 'rating', 'status', 'category', 'bank_name', 'bank_account', 'ifsc_code', 'notes'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -47,13 +47,13 @@ router.put('/vendors/:id', checkPermission('procurement', 'edit'), auditLog('pro
 });
 
 router.delete('/vendors/:id', checkPermission('procurement', 'delete'), (req, res) => {
-    req.app.get('db').prepare('DELETE FROM vendors WHERE id=?').run(req.params.id);
+    req.companyDb.prepare('DELETE FROM vendors WHERE id=?').run(req.params.id);
     res.json({ success: true });
 });
 
 // === PROCUREMENT REQUESTS ===
 router.get('/requests', checkPermission('procurement', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, status } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -64,7 +64,7 @@ router.get('/requests', checkPermission('procurement', 'view'), (req, res) => {
 });
 
 router.post('/requests', checkPermission('procurement', 'create'), auditLog('procurement', 'CREATE_REQUEST'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     const reqNum = `PR-${Date.now().toString(36).toUpperCase()}`;
     db.prepare(`INSERT INTO procurement_requests (id,request_number,title,description,department,requested_by,status,priority,required_date,estimated_cost,vendor_id,notes,items,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, reqNum, b.title, b.description, b.department, req.user.id, b.status || 'pending', b.priority || 'normal', b.required_date, b.estimated_cost || 0, b.vendor_id, b.notes, JSON.stringify(b.items || []));
@@ -72,7 +72,7 @@ router.post('/requests', checkPermission('procurement', 'create'), auditLog('pro
 });
 
 router.put('/requests/:id', checkPermission('procurement', 'edit'), auditLog('procurement', 'UPDATE_REQUEST'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['title', 'description', 'status', 'priority', 'required_date', 'estimated_cost', 'vendor_id', 'notes'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -85,7 +85,7 @@ router.put('/requests/:id', checkPermission('procurement', 'edit'), auditLog('pr
 
 // === STATS ===
 router.get('/stats', checkPermission('procurement', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const activeVendors = db.prepare("SELECT COUNT(*) as v FROM vendors WHERE status='active'").get().v;
     const pendingRequests = db.prepare("SELECT COUNT(*) as v FROM procurement_requests WHERE status='pending'").get().v;
     const totalSpend = db.prepare("SELECT COALESCE(SUM(approved_cost),0) as v FROM procurement_requests WHERE status='approved'").get().v;

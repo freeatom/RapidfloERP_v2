@@ -5,7 +5,7 @@ const router = Router();
 // GET /api/dashboard - Executive Dashboard Data
 router.get('/', (req, res) => {
   try {
-    const db = req.app.get('db');
+    const db = req.companyDb;
 
     // === KPI CARDS ===
     // Revenue (invoices paid)

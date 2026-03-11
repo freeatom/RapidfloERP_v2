@@ -6,7 +6,7 @@ const router = Router();
 
 // Revenue report
 router.get('/revenue', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { period = 'monthly', from_date, to_date, group_by } = req.query;
     const dateFilter = from_date && to_date ? `AND issue_date BETWEEN '${from_date}' AND '${to_date}'` : '';
     let groupClause;
@@ -23,7 +23,7 @@ router.get('/revenue', checkPermission('reports', 'view'), (req, res) => {
 
 // Sales pipeline report
 router.get('/pipeline', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const pipeline = db.prepare("SELECT stage, COUNT(*) as count, COALESCE(SUM(amount),0) as value, COALESCE(AVG(probability),0) as avg_probability, COALESCE(SUM(amount*probability/100),0) as weighted_value FROM opportunities GROUP BY stage ORDER BY CASE stage WHEN 'prospecting' THEN 1 WHEN 'qualification' THEN 2 WHEN 'proposal' THEN 3 WHEN 'negotiation' THEN 4 WHEN 'closed_won' THEN 5 WHEN 'closed_lost' THEN 6 END").all();
     const winRate = db.prepare("SELECT COALESCE(COUNT(CASE WHEN stage='closed_won' THEN 1 END)*100.0/NULLIF(COUNT(CASE WHEN stage IN ('closed_won','closed_lost') THEN 1 END),0),0) as rate FROM opportunities").get();
     const avgDealSize = db.prepare("SELECT COALESCE(AVG(amount),0) as avg FROM opportunities WHERE stage='closed_won'").get();
@@ -34,7 +34,7 @@ router.get('/pipeline', checkPermission('reports', 'view'), (req, res) => {
 
 // Expense report
 router.get('/expenses', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { from_date, to_date } = req.query;
     const dateFilter = from_date && to_date ? `AND expense_date BETWEEN '${from_date}' AND '${to_date}'` : '';
     const byCategory = db.prepare(`SELECT category, COUNT(*) as count, SUM(total_amount) as total FROM expenses WHERE status!='rejected' ${dateFilter} GROUP BY category ORDER BY total DESC`).all();
@@ -46,7 +46,7 @@ router.get('/expenses', checkPermission('reports', 'view'), (req, res) => {
 
 // Inventory report
 router.get('/inventory', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const valuation = db.prepare('SELECT COALESCE(SUM(total_value),0) as total FROM stock_levels').get();
     const lowStock = db.prepare('SELECT p.name,p.sku,sl.quantity,p.min_stock_level,sl.warehouse_id,w.name as warehouse FROM stock_levels sl JOIN products p ON p.id=sl.product_id LEFT JOIN warehouses w ON w.id=sl.warehouse_id WHERE sl.available_quantity<=p.min_stock_level').all();
     const byCategory = db.prepare('SELECT p.category, COUNT(DISTINCT p.id) as product_count, SUM(sl.quantity) as total_qty, SUM(sl.total_value) as total_value FROM stock_levels sl JOIN products p ON p.id=sl.product_id GROUP BY p.category').all();
@@ -57,7 +57,7 @@ router.get('/inventory', checkPermission('reports', 'view'), (req, res) => {
 
 // HR report
 router.get('/hr', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const headcount = db.prepare("SELECT COUNT(*) as total, COUNT(CASE WHEN status='active' THEN 1 END) as active FROM employees").get();
     const byDept = db.prepare("SELECT d.name as department, COUNT(e.id) as count FROM employees e JOIN departments d ON d.id=e.department_id WHERE e.status='active' GROUP BY e.department_id ORDER BY count DESC").all();
     const byType = db.prepare("SELECT employment_type, COUNT(*) as count FROM employees WHERE status='active' GROUP BY employment_type").all();
@@ -70,7 +70,7 @@ router.get('/hr', checkPermission('reports', 'view'), (req, res) => {
 
 // Projects report
 router.get('/projects', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const overview = db.prepare("SELECT status, COUNT(*) as count, COALESCE(SUM(budget),0) as budget, COALESCE(SUM(actual_cost),0) as cost FROM projects GROUP BY status").all();
     const utilization = db.prepare("SELECT u.first_name||' '||u.last_name as user_name, SUM(te.hours) as total_hours, SUM(CASE WHEN te.is_billable=1 THEN te.hours ELSE 0 END) as billable FROM time_entries te JOIN users u ON u.id=te.user_id WHERE te.date>=date('now','-30 days') GROUP BY te.user_id ORDER BY total_hours DESC").all();
     const overdue = db.prepare("SELECT p.name,p.code,p.end_date,p.progress,u.first_name||' '||u.last_name as owner FROM projects p LEFT JOIN users u ON u.id=p.owner_id WHERE p.end_date<date('now') AND p.status NOT IN ('completed','cancelled')").all();
@@ -80,7 +80,7 @@ router.get('/projects', checkPermission('reports', 'view'), (req, res) => {
 
 // Support report
 router.get('/support', checkPermission('reports', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const overview = db.prepare("SELECT status, COUNT(*) as count FROM tickets GROUP BY status").all();
     const byPriority = db.prepare("SELECT priority, COUNT(*) as count, AVG(CASE WHEN resolved_at IS NOT NULL THEN (julianday(resolved_at)-julianday(created_at))*24 END) as avg_resolution_hours FROM tickets GROUP BY priority").all();
     const byAgent = db.prepare("SELECT u.first_name||' '||u.last_name as agent, COUNT(t.id) as total, COUNT(CASE WHEN t.status='resolved' THEN 1 END) as resolved, AVG(t.csat_score) as avg_csat FROM tickets t JOIN users u ON u.id=t.assigned_to GROUP BY t.assigned_to ORDER BY total DESC").all();
@@ -92,7 +92,7 @@ router.get('/support', checkPermission('reports', 'view'), (req, res) => {
 
 // Audit log report
 router.get('/audit', checkPermission('admin', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 50, module, user_id, action, from_date, to_date } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];

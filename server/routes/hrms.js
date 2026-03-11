@@ -6,20 +6,20 @@ const router = Router();
 
 // === DEPARTMENTS ===
 router.get('/departments', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const depts = db.prepare(`SELECT d.*,(SELECT COUNT(*) FROM employees WHERE department_id=d.id AND status='active') as headcount, u.first_name||' '||u.last_name as head_name FROM departments d LEFT JOIN users u ON u.id=d.head_id ORDER BY d.name`).all();
     res.json({ departments: depts });
 });
 
 router.post('/departments', checkPermission('hrms', 'create'), auditLog('hrms', 'CREATE_DEPT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     db.prepare(`INSERT INTO departments (id,name,code,description,head_id,parent_id,budget,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.name, b.code, b.description, b.head_id, b.parent_id, b.budget || 0);
     res.status(201).json(db.prepare('SELECT * FROM departments WHERE id=?').get(id));
 });
 
 router.put('/departments/:id', checkPermission('hrms', 'edit'), auditLog('hrms', 'UPDATE_DEPT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['name', 'code', 'description', 'head_id', 'parent_id', 'budget', 'is_active'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -30,7 +30,7 @@ router.put('/departments/:id', checkPermission('hrms', 'edit'), auditLog('hrms',
 
 // === EMPLOYEES ===
 router.get('/employees', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, department_id, status, employment_type } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -45,7 +45,7 @@ router.get('/employees', checkPermission('hrms', 'view'), (req, res) => {
 });
 
 router.get('/employees/:id', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const emp = db.prepare('SELECT e.*,d.name as department_name FROM employees e LEFT JOIN departments d ON d.id=e.department_id WHERE e.id=?').get(req.params.id);
     if (!emp) return res.status(404).json({ error: 'Not found' });
     emp.attendance = db.prepare('SELECT * FROM attendance WHERE employee_id=? ORDER BY date DESC LIMIT 30').all(req.params.id);
@@ -55,7 +55,7 @@ router.get('/employees/:id', checkPermission('hrms', 'view'), (req, res) => {
 });
 
 router.post('/employees', checkPermission('hrms', 'create'), auditLog('hrms', 'CREATE_EMPLOYEE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.first_name || !b.last_name || !b.email) return res.status(400).json({ error: 'Name and email required' });
     const empId = b.employee_id || `EMP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
@@ -64,7 +64,7 @@ router.post('/employees', checkPermission('hrms', 'create'), auditLog('hrms', 'C
 });
 
 router.put('/employees/:id', checkPermission('hrms', 'edit'), captureOldValues('employees'), auditLog('hrms', 'UPDATE_EMPLOYEE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['first_name', 'last_name', 'email', 'phone', 'personal_email', 'date_of_birth', 'gender', 'marital_status', 'address', 'city', 'state', 'country', 'postal_code', 'emergency_contact_name', 'emergency_contact_phone', 'department_id', 'designation', 'employment_type', 'date_of_joining', 'date_of_leaving', 'reporting_manager_id', 'status', 'base_salary', 'bank_name', 'bank_account', 'ifsc_code', 'pan_number', 'shift', 'work_location', 'notes'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -75,13 +75,13 @@ router.put('/employees/:id', checkPermission('hrms', 'edit'), captureOldValues('
 });
 
 router.delete('/employees/:id', checkPermission('hrms', 'delete'), auditLog('hrms', 'DELETE_EMPLOYEE'), (req, res) => {
-    req.app.get('db').prepare("UPDATE employees SET status='terminated',date_of_leaving=date('now'),updated_at=datetime('now') WHERE id=?").run(req.params.id);
+    req.companyDb.prepare("UPDATE employees SET status='terminated',date_of_leaving=date('now'),updated_at=datetime('now') WHERE id=?").run(req.params.id);
     res.json({ success: true });
 });
 
 // === ATTENDANCE ===
 router.get('/attendance', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { employee_id, date, month } = req.query;
     let where = ['1=1'], params = [];
     if (employee_id) { where.push("a.employee_id=?"); params.push(employee_id); }
@@ -92,7 +92,7 @@ router.get('/attendance', checkPermission('hrms', 'view'), (req, res) => {
 });
 
 router.post('/attendance', checkPermission('hrms', 'create'), auditLog('hrms', 'RECORD_ATTENDANCE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.employee_id) return res.status(400).json({ error: 'Employee required' });
     const workHours = b.clock_in && b.clock_out ? ((new Date('2000-01-01T' + b.clock_out) - new Date('2000-01-01T' + b.clock_in)) / 3600000) : b.work_hours || 0;
@@ -102,7 +102,7 @@ router.post('/attendance', checkPermission('hrms', 'create'), auditLog('hrms', '
 
 // === LEAVES ===
 router.get('/leaves', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { employee_id, status } = req.query;
     let where = ['1=1'], params = [];
     if (employee_id) { where.push("l.employee_id=?"); params.push(employee_id); }
@@ -112,7 +112,7 @@ router.get('/leaves', checkPermission('hrms', 'view'), (req, res) => {
 });
 
 router.post('/leaves', checkPermission('hrms', 'create'), auditLog('hrms', 'CREATE_LEAVE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.employee_id || !b.leave_type || !b.start_date || !b.end_date) return res.status(400).json({ error: 'Employee, type, dates required' });
     const days = b.days || Math.ceil((new Date(b.end_date) - new Date(b.start_date)) / 86400000) + 1;
@@ -121,7 +121,7 @@ router.post('/leaves', checkPermission('hrms', 'create'), auditLog('hrms', 'CREA
 });
 
 router.put('/leaves/:id', checkPermission('hrms', 'edit'), auditLog('hrms', 'UPDATE_LEAVE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const updates = [], values = [];
     if (req.body.status) { updates.push("status=?"); values.push(req.body.status); }
     if (req.body.status === 'approved') { updates.push("approved_by=?", "approved_at=datetime('now')"); values.push(req.user.id); }
@@ -133,7 +133,7 @@ router.put('/leaves/:id', checkPermission('hrms', 'edit'), auditLog('hrms', 'UPD
 
 // === PAYROLL ===
 router.get('/payroll', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { month, year, employee_id } = req.query;
     let where = ['1=1'], params = [];
     if (month) { where.push("pr.month=?"); params.push(month); }
@@ -145,7 +145,7 @@ router.get('/payroll', checkPermission('hrms', 'view'), (req, res) => {
 });
 
 router.post('/payroll/generate', checkPermission('hrms', 'create'), auditLog('hrms', 'GENERATE_PAYROLL'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { month, year } = req.body;
     if (!month || !year) return res.status(400).json({ error: 'Month and year required' });
     const employees = db.prepare("SELECT * FROM employees WHERE status='active'").all();
@@ -171,7 +171,7 @@ router.post('/payroll/generate', checkPermission('hrms', 'create'), auditLog('hr
 });
 
 router.put('/payroll/:id', checkPermission('hrms', 'edit'), auditLog('hrms', 'UPDATE_PAYROLL'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['status', 'bonus', 'other_deductions', 'other_allowances', 'notes', 'payment_date', 'payment_method', 'transaction_reference'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -192,7 +192,7 @@ router.put('/payroll/:id', checkPermission('hrms', 'edit'), auditLog('hrms', 'UP
 
 // === STATS ===
 router.get('/stats', checkPermission('hrms', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const totalEmployees = db.prepare("SELECT COUNT(*) as v FROM employees").get().v;
     const activeEmployees = db.prepare("SELECT COUNT(*) as v FROM employees WHERE status='active'").get().v;
     const departments = db.prepare("SELECT COUNT(*) as v FROM departments WHERE is_active=1").get().v;

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { getCompanyDb } from '../db/companyDbPool.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'rapiderp-v2-enterprise-secret-key-2024-production';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h';
@@ -31,6 +32,11 @@ export function validatePasswordStrength(password) {
     return { valid: errors.length === 0, errors };
 }
 
+/**
+ * Auth middleware — checks token and resolves user from:
+ * 1. main DB (super_admins table) if token says isSuperAdmin
+ * 2. company DB (users table) if token has companyId
+ */
 export function authMiddleware(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
@@ -40,30 +46,58 @@ export function authMiddleware(req, res, next) {
         const token = authHeader.split(' ')[1];
         const decoded = verifyToken(token);
 
-        // Check if user is still active
-        const db = req.app.get('db');
-        const user = db.prepare('SELECT id, email, first_name, last_name, role_id, is_active, is_locked FROM users WHERE id = ?').get(decoded.userId);
+        const mainDb = req.app.get('db');
 
+        // SuperAdmin check
+        if (decoded.isSuperAdmin) {
+            const admin = mainDb.prepare('SELECT * FROM super_admins WHERE id = ?').get(decoded.userId);
+            if (!admin) return res.status(401).json({ error: 'SuperAdmin not found', code: 'USER_NOT_FOUND' });
+            if (!admin.is_active) return res.status(403).json({ error: 'Account deactivated', code: 'ACCOUNT_DISABLED' });
+            if (admin.is_locked) return res.status(403).json({ error: 'Account locked', code: 'ACCOUNT_LOCKED' });
+
+            req.user = {
+                id: admin.id,
+                email: admin.email,
+                firstName: admin.first_name,
+                lastName: admin.last_name,
+                isSuperAdmin: true,
+                roleLevel: 0,
+                roleName: 'super_admin',
+                companyId: null // SuperAdmin is not bound to any company
+            };
+
+            mainDb.prepare(`UPDATE super_admins SET last_login_at = datetime('now') WHERE id = ?`).run(admin.id);
+            return next();
+        }
+
+        // Company user check
+        if (!decoded.companyId) {
+            return res.status(401).json({ error: 'Invalid token: no company context', code: 'NO_COMPANY' });
+        }
+
+        const companyDb = getCompanyDb(decoded.companyId);
+        if (!companyDb) return res.status(401).json({ error: 'Company database not available', code: 'COMPANY_DB_ERROR' });
+
+        const user = companyDb.prepare('SELECT id, email, first_name, last_name, role_id, is_active, is_locked FROM users WHERE id = ?').get(decoded.userId);
         if (!user) return res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
         if (!user.is_active) return res.status(403).json({ error: 'Account deactivated', code: 'ACCOUNT_DISABLED' });
         if (user.is_locked) return res.status(403).json({ error: 'Account locked', code: 'ACCOUNT_LOCKED' });
 
-        // Get role info
-        const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(user.role_id);
+        const role = companyDb.prepare('SELECT * FROM roles WHERE id = ?').get(user.role_id);
 
         req.user = {
             id: user.id,
             email: user.email,
             firstName: user.first_name,
             lastName: user.last_name,
+            isSuperAdmin: false,
             roleId: user.role_id,
             roleName: role?.name || 'viewer',
-            roleLevel: role?.level || 5
+            roleLevel: role?.level || 5,
+            companyId: decoded.companyId
         };
 
-        // Update last activity
-        db.prepare(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
-
+        companyDb.prepare(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?`).run(user.id);
         next();
     } catch (err) {
         if (err.name === 'TokenExpiredError') {

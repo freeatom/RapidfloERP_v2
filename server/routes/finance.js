@@ -6,7 +6,7 @@ const router = Router();
 
 // === INVOICES ===
 router.get('/invoices', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, type } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -20,7 +20,7 @@ router.get('/invoices', checkPermission('finance', 'view'), (req, res) => {
 });
 
 router.get('/invoices/:id', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const invoice = db.prepare('SELECT i.*,a.name as account_name FROM invoices i LEFT JOIN accounts a ON a.id=i.account_id WHERE i.id=?').get(req.params.id);
     if (!invoice) return res.status(404).json({ error: 'Not found' });
     invoice.items = db.prepare('SELECT ii.*,p.name as product_name FROM invoice_items ii LEFT JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=? ORDER BY ii.sort_order').all(req.params.id);
@@ -29,7 +29,7 @@ router.get('/invoices/:id', checkPermission('finance', 'view'), (req, res) => {
 });
 
 router.post('/invoices', checkPermission('finance', 'create'), auditLog('finance', 'CREATE_INVOICE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
     const dueDate = b.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -56,7 +56,7 @@ router.post('/invoices', checkPermission('finance', 'create'), auditLog('finance
 });
 
 router.put('/invoices/:id', checkPermission('finance', 'edit'), captureOldValues('invoices'), auditLog('finance', 'UPDATE_INVOICE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['status', 'due_date', 'notes', 'terms_and_conditions', 'payment_terms'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -66,7 +66,7 @@ router.put('/invoices/:id', checkPermission('finance', 'edit'), captureOldValues
 });
 
 router.delete('/invoices/:id', checkPermission('finance', 'delete'), auditLog('finance', 'DELETE_INVOICE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     db.prepare('DELETE FROM invoice_items WHERE invoice_id=?').run(req.params.id);
     db.prepare("DELETE FROM gl_entries WHERE reference_type='invoice' AND reference_id=?").run(req.params.id);
     db.prepare('DELETE FROM invoices WHERE id=?').run(req.params.id);
@@ -75,7 +75,7 @@ router.delete('/invoices/:id', checkPermission('finance', 'delete'), auditLog('f
 
 // === PAYMENTS ===
 router.post('/payments', checkPermission('finance', 'create'), auditLog('finance', 'CREATE_PAYMENT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.invoice_id || !b.amount) return res.status(400).json({ error: 'Invoice and amount required' });
     const payNum = `PAY-${Date.now().toString(36).toUpperCase()}`;
@@ -95,14 +95,14 @@ router.post('/payments', checkPermission('finance', 'create'), auditLog('finance
 });
 
 router.get('/payments', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const payments = db.prepare('SELECT pr.*,i.invoice_number,a.name as account_name FROM payment_records pr LEFT JOIN invoices i ON i.id=pr.invoice_id LEFT JOIN accounts a ON a.id=i.account_id ORDER BY pr.payment_date DESC LIMIT 100').all();
     res.json({ payments });
 });
 
 // === EXPENSES ===
 router.get('/expenses', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, category } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -115,7 +115,7 @@ router.get('/expenses', checkPermission('finance', 'view'), (req, res) => {
 });
 
 router.post('/expenses', checkPermission('finance', 'create'), auditLog('finance', 'CREATE_EXPENSE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.category || !b.amount) return res.status(400).json({ error: 'Category and amount required' });
     const expNum = `EXP-${Date.now().toString(36).toUpperCase()}`;
@@ -126,7 +126,7 @@ router.post('/expenses', checkPermission('finance', 'create'), auditLog('finance
 });
 
 router.put('/expenses/:id', checkPermission('finance', 'edit'), auditLog('finance', 'UPDATE_EXPENSE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['category', 'description', 'amount', 'tax_amount', 'total_amount', 'status', 'payment_method', 'notes', 'expense_date'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -144,13 +144,13 @@ router.put('/expenses/:id', checkPermission('finance', 'edit'), auditLog('financ
 });
 
 router.delete('/expenses/:id', checkPermission('finance', 'delete'), (req, res) => {
-    req.app.get('db').prepare('DELETE FROM expenses WHERE id=?').run(req.params.id);
+    req.companyDb.prepare('DELETE FROM expenses WHERE id=?').run(req.params.id);
     res.json({ success: true });
 });
 
 // === GL ENTRIES ===
 router.get('/gl-entries', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 50, account_code, from_date, to_date } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -166,11 +166,11 @@ router.get('/gl-entries', checkPermission('finance', 'view'), (req, res) => {
 
 // === TAX RULES ===
 router.get('/tax-rules', checkPermission('finance', 'view'), (req, res) => {
-    res.json({ taxRules: req.app.get('db').prepare('SELECT * FROM tax_rules ORDER BY rate').all() });
+    res.json({ taxRules: req.companyDb.prepare('SELECT * FROM tax_rules ORDER BY rate').all() });
 });
 
 router.post('/tax-rules', checkPermission('finance', 'create'), auditLog('finance', 'CREATE_TAX'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     db.prepare(`INSERT INTO tax_rules (id,name,code,rate,type,region,category,is_compound,is_active,effective_from,effective_until,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.name, b.code, b.rate, b.type || 'GST', b.region, b.category, b.is_compound || 0, b.is_active ?? 1, b.effective_from, b.effective_until);
     res.status(201).json(db.prepare('SELECT * FROM tax_rules WHERE id=?').get(id));
@@ -178,7 +178,7 @@ router.post('/tax-rules', checkPermission('finance', 'create'), auditLog('financ
 
 // === FINANCIAL STATEMENTS ===
 router.get('/statements/pnl', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { from_date, to_date } = req.query;
     const dateFilter = from_date && to_date ? `AND date BETWEEN '${from_date}' AND '${to_date}'` : '';
     const revenue = db.prepare(`SELECT COALESCE(SUM(credit)-SUM(debit),0) as total FROM gl_entries WHERE account_code LIKE '4%' ${dateFilter}`).get();
@@ -191,7 +191,7 @@ router.get('/statements/pnl', checkPermission('finance', 'view'), (req, res) => 
 });
 
 router.get('/statements/balance-sheet', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const assets = db.prepare("SELECT account_name,account_code,SUM(debit)-SUM(credit) as balance FROM gl_entries WHERE account_code LIKE '1%' GROUP BY account_code").all();
     const liabilities = db.prepare("SELECT account_name,account_code,SUM(credit)-SUM(debit) as balance FROM gl_entries WHERE account_code LIKE '2%' GROUP BY account_code").all();
     const equity = db.prepare("SELECT account_name,account_code,SUM(credit)-SUM(debit) as balance FROM gl_entries WHERE account_code LIKE '3%' GROUP BY account_code").all();
@@ -204,7 +204,7 @@ router.get('/statements/balance-sheet', checkPermission('finance', 'view'), (req
 
 // === STATS ===
 router.get('/stats', checkPermission('finance', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const revenueMTD = db.prepare("SELECT COALESCE(SUM(credit)-SUM(debit),0) as v FROM gl_entries WHERE account_code LIKE '4%' AND date >= date('now','start of month')").get().v;
     const outstandingAR = db.prepare("SELECT COALESCE(SUM(balance_due),0) as v FROM invoices WHERE type='sales' AND status IN ('sent','partial','overdue')").get().v;
     const outstandingAP = db.prepare("SELECT COALESCE(SUM(balance_due),0) as v FROM invoices WHERE type='purchase' AND status IN ('sent','partial','overdue')").get().v;

@@ -6,8 +6,9 @@ import {
     LayoutDashboard, Users, ShoppingCart, DollarSign, Package,
     Truck, UserCheck, FolderKanban, LifeBuoy, BarChart3, Settings,
     Bell, Search, ChevronLeft, LogOut, Menu, X, Moon, Sun, Zap, ScanLine,
-    ArrowRight, Command
+    ArrowRight, Command, Building2, ChevronDown, LogIn, Shield, ExternalLink
 } from 'lucide-react';
+import logo from "../assets/logo.png";
 
 const navItems = [
     {
@@ -37,14 +38,21 @@ const navItems = [
         section: 'System', items: [
             { path: '/reports', icon: BarChart3, label: 'Reports' },
             { path: '/admin', icon: Settings, label: 'Admin' },
+            { path: '/companies', icon: Building2, label: 'Companies', adminOnly: true },
         ]
     },
 ];
 
 export default function Layout() {
-    const { user, logout } = useAuth();
+    const { user, logout, enterCompany, exitCompany } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+    const activeCompanyId = localStorage.getItem('erp_company_id');
+    const isSuperAdmin = user?.isSuperAdmin || user?.roleLevel <= 1;
+    const needsCompanyGate = isSuperAdmin && !activeCompanyId && location.pathname !== '/companies';
+    const [companies, setCompanies] = useState([]);
+    const [gateLoading, setGateLoading] = useState(true);
+    const [gateSearch, setGateSearch] = useState('');
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
@@ -71,18 +79,29 @@ export default function Layout() {
     const searchRef = useRef(null);
     const searchTimerRef = useRef(null);
 
+    // Fetch companies for SuperAdmin gate
     useEffect(() => {
-        api('/notifications').then(data => setNotifications(data.notifications || [])).catch(() => { });
-        const interval = setInterval(() => {
-            api('/notifications').then(data => setNotifications(data.notifications || [])).catch(() => { });
-        }, 30000);
-        return () => clearInterval(interval);
-    }, []);
+        if (needsCompanyGate) {
+            api('/admin/companies').then(d => { setCompanies(d.companies || []); setGateLoading(false); }).catch(() => setGateLoading(false));
+        }
+    }, [needsCompanyGate]);
 
-    // Fetch enabled modules on mount and when location changes (catches admin toggles)
     useEffect(() => {
-        api('/modules/enabled').then(data => setEnabledModules(data.modules || [])).catch(() => { });
-    }, [location.pathname]);
+        if (!needsCompanyGate) {
+            api('/notifications').then(data => setNotifications(data.notifications || [])).catch(() => { });
+            const interval = setInterval(() => {
+                api('/notifications').then(data => setNotifications(data.notifications || [])).catch(() => { });
+            }, 30000);
+            return () => clearInterval(interval);
+        }
+    }, [needsCompanyGate]);
+
+    // Fetch enabled modules on mount and when location changes
+    useEffect(() => {
+        if (!needsCompanyGate) {
+            api('/modules/enabled').then(data => setEnabledModules(data.modules || [])).catch(() => { });
+        }
+    }, [location.pathname, needsCompanyGate]);
 
     // Ctrl+K shortcut
     useEffect(() => {
@@ -147,12 +166,101 @@ export default function Layout() {
         setSearchQuery('');
     };
 
+    // === COMPANY GATE for SuperAdmin ===
+    if (needsCompanyGate) {
+        const filtered = companies.filter(c =>
+            !gateSearch || c.name.toLowerCase().includes(gateSearch.toLowerCase()) || c.code.toLowerCase().includes(gateSearch.toLowerCase())
+        );
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
+                {/* Top header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-surface)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <img src={logo} alt="Logo" style={{ height: 32 }} />
+                        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Rapidflo</h2>
+                        <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: 700 }}>Super Admin</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <button className="btn-ghost btn-icon" onClick={toggleTheme} title="Toggle Theme">
+                            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div className="avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>{user?.first_name} {user?.last_name}</span>
+                        </div>
+                        <button className="btn-ghost btn-icon" onClick={async () => { await logout(); navigate('/login'); }} title="Logout"><LogOut size={18} /></button>
+                    </div>
+                </div>
+                {/* Main area */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '48px 24px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 40 }}>
+                        <Shield size={48} style={{ color: 'var(--color-primary)', marginBottom: 16 }} />
+                        <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 800 }}>Select a Company</h1>
+                        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 15, maxWidth: 500 }}>Choose which company's ERP data you want to access. Data is fully isolated between companies.</p>
+                    </div>
+                    {/* Search + Manage */}
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 24, width: '100%', maxWidth: 500 }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                            <input className="form-input" value={gateSearch} onChange={e => setGateSearch(e.target.value)} placeholder="Search companies..." style={{ paddingLeft: 36, width: '100%' }} />
+                        </div>
+                        <button className="btn-primary" onClick={() => navigate('/companies')}
+                            style={{ borderRadius: 8, padding: '8px 16px', whiteSpace: 'nowrap', fontSize: 13 }}>
+                            <Settings size={14} style={{ marginRight: 4 }} /> Manage Companies
+                        </button>
+                    </div>
+                    {/* Company cards */}
+                    {gateLoading ? (
+                        <div style={{ padding: 60, color: 'var(--text-muted)' }}>Loading companies...</div>
+                    ) : filtered.length === 0 ? (
+                        <div className="card" style={{ padding: 60, textAlign: 'center', width: '100%', maxWidth: 600 }}>
+                            <Building2 size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
+                            <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)' }}>{companies.length === 0 ? 'No companies yet' : 'No matching companies'}</h3>
+                            <p style={{ margin: 0, color: 'var(--text-muted)' }}>Create your first company from the Manage Companies panel</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, width: '100%', maxWidth: Object.keys(filtered).length <= 2 ? 800 : 1200, margin: '0 auto' }}>
+                            {filtered.map(c => (
+                                <div key={c.id} className="card" style={{ padding: '24px 28px', cursor: 'pointer', transition: 'transform .2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .2s cubic-bezier(0.4, 0, 0.2, 1), border-color .2s', border: '2px solid transparent', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}
+                                    onClick={() => enterCompany(c.id)}
+                                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,.1)'; e.currentTarget.style.borderColor = 'var(--color-primary)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'transparent'; }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+                                        <div style={{ width: 48, height: 48, borderRadius: 14, background: 'linear-gradient(135deg, var(--color-primary), #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 20, boxShadow: '0 4px 12px rgba(99,102,241,.3)' }}>
+                                            {c.name?.[0]?.toUpperCase()}
+                                        </div>
+                                        <span style={{ fontSize: 11, padding: '4px 12px', borderRadius: 20, background: c.is_active ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)', color: c.is_active ? '#16a34a' : '#dc2626', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                            {c.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{c.name}</h3>
+                                        <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--text-muted)' }}>{c.code} {c.industry ? `• ${c.industry}` : ''}</p>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 13, borderTop: '1px solid var(--border-light)', paddingTop: 16, marginTop: 'auto' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 500 }}>
+                                            <Users size={16} /> <span>{c.user_count || 0} users</span>
+                                        </div>
+                                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-primary)', fontWeight: 700, fontSize: 13, opacity: 0.9 }}>
+                                            Select <ArrowRight size={14} />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // === NORMAL LAYOUT (company selected or non-SuperAdmin) ===
     return (
         <div className="app-layout">
             {/* Sidebar */}
             <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
-                    <div className="logo-icon">R</div>
+                    <img src={logo} alt="Logo" className="logo-icon" />
                     {!collapsed && <h1>Rapidflo</h1>}
                     <button className="btn-ghost btn-icon" onClick={() => { setCollapsed(!collapsed); setMobileOpen(false); }} style={{ marginLeft: 'auto' }}>
                         <ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'var(--transition)' }} />
@@ -162,8 +270,12 @@ export default function Layout() {
                     {navItems.map((section) => {
                         // Filter section items by enabled modules
                         // Always-visible: /, /reports, /admin, /workflows, /scanner
-                        const alwaysVisible = ['/', '/reports', '/admin', '/workflows', '/scanner'];
+                        const alwaysVisible = ['/', '/reports', '/admin', '/workflows', '/scanner', '/companies'];
                         const filteredItems = section.items.filter(item => {
+                            if (item.path === '/companies') {
+                                if (!isSuperAdmin || activeCompanyId) return false;
+                            }
+                            if (item.adminOnly && (!user || user.roleLevel > 2)) return false;
                             if (alwaysVisible.includes(item.path)) return true;
                             if (!enabledModules) return true; // Still loading, show all
                             const moduleName = item.path.replace('/', '');
@@ -215,6 +327,35 @@ export default function Layout() {
                         </div>
                     </div>
                     <div className="topbar-right">
+                        {/* Current Company indicator (All users in a company) */}
+                        {activeCompanyId && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginRight: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.2)', fontSize: 13 }}>
+                                    <Building2 size={16} style={{ color: 'var(--color-primary)' }} />
+                                    {isSuperAdmin ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Viewing Company</span>
+                                            <span style={{ fontWeight: 800, color: 'var(--text-primary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {user?.companyName || 'Unknown Company'}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center' }}>
+                                            {user?.companyName || 'Unknown Company'}
+                                        </span>
+                                    )}
+                                </div>
+                                {/* Exit Company (SuperAdmin only) */}
+                                {isSuperAdmin && (
+                                    <button onClick={exitCompany} title="Exit to Company Selector" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 700, transition: 'var(--transition)' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.2)'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}>
+                                        <LogOut size={16} /> Exit Company
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
                         {/* Global Search */}
                         <div style={{ position: 'relative' }}>
                             <div className="search-box" style={{ position: 'relative' }}>

@@ -5,7 +5,7 @@ const router = Router();
 // GET /api/search?q=term - Cross-module global search
 router.get('/', (req, res) => {
     try {
-        const db = req.app.get('db');
+        const db = req.companyDb;
         const q = req.query.q || '';
         if (!q || q.length < 2) return res.json({ results: [], total: 0 });
 

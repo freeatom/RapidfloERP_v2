@@ -27,7 +27,7 @@ export default function LoginPage() {
         } finally { setLoading(false); }
     };
 
-    const quickLogin = (email) => { setEmail(email); setPassword('Admin@123'); };
+    const quickLogin = (email, pw) => { setEmail(email); setPassword(pw); };
 
     return (
         <div className="login-page">
@@ -91,20 +91,19 @@ export default function LoginPage() {
 
                 {/* Demo accounts */}
                 <div style={{ marginTop: 'var(--space-xl)', borderTop: '1px solid var(--border-color)', paddingTop: 'var(--space-lg)' }}>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: 'var(--space-md)' }}>Demo Accounts (click to fill)</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: 'var(--space-md)' }}>Test Accounts (click to fill)</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)' }}>
                         {[
-                            { label: 'Super Admin', email: 'superadmin@rapidflo.com' },
-                            { label: 'Admin', email: 'admin@rapidflo.com' },
-                            { label: 'Manager', email: 'sales.mgr@rapidflo.com' },
-                            { label: 'Employee', email: 'employee1@rapidflo.com' },
+                            { label: 'Platform SuperAdmin 1', email: 'admin@rapidflo.com', pw: 'Admin@123' },
+                            { label: 'Platform SuperAdmin 2', email: 'superadmin2@rapidflo.com', pw: 'SuperPassword@123' },
+                            { label: 'Acme Corp Admin', email: 'admin@acmecorp.com', pw: 'Password@123' },
+                            { label: 'GG Corp Admin', email: 'admin@gg.com', pw: 'Admin@123' },
                         ].map(acc => (
-                            <button key={acc.email} className="btn btn-secondary btn-sm" onClick={() => quickLogin(acc.email)} style={{ fontSize: '0.75rem' }}>
+                            <button key={acc.email} type="button" className="btn btn-secondary btn-sm" onClick={() => quickLogin(acc.email, acc.pw)} style={{ fontSize: '0.75rem', padding: '6px 4px' }}>
                                 {acc.label}
                             </button>
                         ))}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-disabled)', textAlign: 'center', marginTop: 'var(--space-sm)' }}>All passwords: Admin@123</div>
                 </div>
             </div>
         </div>

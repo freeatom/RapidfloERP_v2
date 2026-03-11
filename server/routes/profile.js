@@ -11,7 +11,7 @@ async function hashPassword(password) {
 
 // GET /profile — current user info
 router.get('/', (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const user = db.prepare(`
         SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.avatar,
                u.timezone, u.locale, u.is_active, u.created_at, u.updated_at,
@@ -38,7 +38,7 @@ router.get('/', (req, res) => {
 
 // PUT /profile — update own profile
 router.put('/', auditLog('profile', 'UPDATE_PROFILE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['first_name', 'last_name', 'phone', 'timezone', 'locale', 'avatar'];
     const updates = [], values = [];
     fields.forEach(f => {
@@ -60,7 +60,7 @@ router.put('/', auditLog('profile', 'UPDATE_PROFILE'), (req, res) => {
 
 // PUT /profile/password — change own password
 router.put('/password', auditLog('profile', 'CHANGE_PASSWORD'), async (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { current_password, new_password } = req.body;
     if (!current_password || !new_password) {
         return res.status(400).json({ error: 'Current and new password required' });
@@ -82,7 +82,7 @@ router.put('/password', auditLog('profile', 'CHANGE_PASSWORD'), async (req, res)
 
 // GET /profile/preferences — user preferences
 router.get('/preferences', (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     try {
         const prefs = db.prepare('SELECT * FROM user_preferences WHERE user_id=?').all(req.user.id);
         const map = {};
@@ -95,7 +95,7 @@ router.get('/preferences', (req, res) => {
 
 // PUT /profile/preferences — save user preferences
 router.put('/preferences', (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { preferences } = req.body;
     if (!preferences || typeof preferences !== 'object') {
         return res.status(400).json({ error: 'Preferences object required' });

@@ -6,7 +6,7 @@ const router = Router();
 
 // === WORKFLOW DEFINITIONS ===
 router.get('/', checkPermission('admin', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { module, is_active } = req.query;
     let where = ['1=1'], params = [];
     if (module) { where.push("module=?"); params.push(module); }
@@ -16,7 +16,7 @@ router.get('/', checkPermission('admin', 'view'), (req, res) => {
 });
 
 router.get('/:id', checkPermission('admin', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const workflow = db.prepare('SELECT * FROM workflows WHERE id=?').get(req.params.id);
     if (!workflow) return res.status(404).json({ error: 'Not found' });
     workflow.recentLogs = db.prepare('SELECT * FROM workflow_logs WHERE workflow_id=? ORDER BY created_at DESC LIMIT 20').all(req.params.id);
@@ -28,7 +28,7 @@ router.get('/:id', checkPermission('admin', 'view'), (req, res) => {
 });
 
 router.post('/', requireRole('admin'), auditLog('admin', 'CREATE_WORKFLOW'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.name || !b.module || !b.trigger_type) return res.status(400).json({ error: 'Name, module, and trigger required' });
     db.prepare(`INSERT INTO workflows (id,name,description,module,trigger_type,trigger_config,conditions,actions,is_active,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, b.name, b.description, b.module, b.trigger_type, JSON.stringify(b.trigger_config || {}), JSON.stringify(b.conditions || []), JSON.stringify(b.actions || []), b.is_active ?? 1, req.user.id);
@@ -36,7 +36,7 @@ router.post('/', requireRole('admin'), auditLog('admin', 'CREATE_WORKFLOW'), (re
 });
 
 router.put('/:id', requireRole('admin'), auditLog('admin', 'UPDATE_WORKFLOW'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['name', 'description', 'module', 'trigger_type', 'is_active'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -49,14 +49,14 @@ router.put('/:id', requireRole('admin'), auditLog('admin', 'UPDATE_WORKFLOW'), (
 });
 
 router.delete('/:id', requireRole('super_admin'), auditLog('admin', 'DELETE_WORKFLOW'), (req, res) => {
-    req.app.get('db').prepare('DELETE FROM workflows WHERE id=?').run(req.params.id);
+    req.companyDb.prepare('DELETE FROM workflows WHERE id=?').run(req.params.id);
     res.json({ success: true });
 });
 
 // === WORKFLOW ENGINE (Execution Core) ===
 // This evaluates and executes workflows based on trigger events
 router.post('/execute', checkPermission('admin', 'create'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { module, event, data } = req.body;
     if (!module || !event) return res.status(400).json({ error: 'Module and event required' });
     const startTime = Date.now();
@@ -139,7 +139,7 @@ router.post('/execute', checkPermission('admin', 'create'), (req, res) => {
 
 // === WORKFLOW LOGS ===
 router.get('/:id/logs', checkPermission('admin', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, status } = req.query;
     const offset = (page - 1) * limit;
     let where = ['workflow_id=?'], params = [req.params.id];

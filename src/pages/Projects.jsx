@@ -109,7 +109,7 @@ export default function ProjectsPage() {
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                     <div style={{ flex: 1, height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
-                                                        <div style={{ width: `${item.progress || 0}%`, height: '100%', background: (item.progress || 0) === 100 ? 'var(--success)' : 'var(--primary)', borderRadius: 3, transition: 'width 0.3s' }}></div>
+                                                        <div style={{ width: `${item.progress || 0}%`, height: '100%', background: (item.progress || 0) === 100 ? 'var(--color-success)' : 'var(--color-primary)', borderRadius: 3, transition: 'width 0.3s' }}></div>
                                                     </div>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, minWidth: 32 }}>{item.progress || 0}%</span>
                                                 </div>
@@ -125,7 +125,7 @@ export default function ProjectsPage() {
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                     <div style={{ flex: 1, height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
-                                                        <div style={{ width: `${item.progress || 0}%`, height: '100%', background: 'var(--primary)', borderRadius: 3 }}></div>
+                                                        <div style={{ width: `${item.progress || 0}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 3 }}></div>
                                                     </div>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, minWidth: 32 }}>{item.progress || 0}%</span>
                                                 </div>

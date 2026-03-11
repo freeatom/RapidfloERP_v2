@@ -6,7 +6,7 @@ const router = Router();
 
 // === PROJECTS ===
 router.get('/', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, priority, owner_id } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -29,7 +29,7 @@ router.get('/', checkPermission('projects', 'view'), (req, res) => {
 
 // === STATS (must be before /:id to avoid route conflict) ===
 router.get('/stats', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const activeProjects = db.prepare("SELECT COUNT(*) as v FROM projects WHERE status IN ('planning','in_progress')").get().v;
     const overdue = db.prepare("SELECT COUNT(*) as v FROM projects WHERE end_date < date('now') AND status NOT IN ('completed','cancelled','on_hold')").get().v;
     const totalTasks = db.prepare("SELECT COUNT(*) as v FROM tasks").get().v;
@@ -43,7 +43,7 @@ router.get('/stats', checkPermission('projects', 'view'), (req, res) => {
 
 // === TIME ENTRIES (must be before /:id to avoid route conflict) ===
 router.get('/time-entries', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { project_id, user_id, from_date, to_date, status } = req.query;
     let where = ['1=1'], params = [];
     if (project_id) { where.push("te.project_id=?"); params.push(project_id); }
@@ -57,7 +57,7 @@ router.get('/time-entries', checkPermission('projects', 'view'), (req, res) => {
 });
 
 router.post('/time-entries', checkPermission('projects', 'create'), auditLog('projects', 'LOG_TIME'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.project_id || !b.hours) return res.status(400).json({ error: 'Project and hours required' });
     const project = db.prepare('SELECT billing_rate FROM projects WHERE id=?').get(b.project_id);
@@ -72,7 +72,7 @@ router.post('/time-entries', checkPermission('projects', 'create'), auditLog('pr
 
 // === GLOBAL TASKS LISTING (must be before /:id) ===
 router.get('/tasks', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, priority, assignee_id, project_id } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -88,7 +88,7 @@ router.get('/tasks', checkPermission('projects', 'view'), (req, res) => {
 
 // === GLOBAL MILESTONES LISTING (must be before /:id) ===
 router.get('/milestones', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { page = 1, limit = 25, search, status, project_id } = req.query;
     const offset = (page - 1) * limit;
     let where = ['1=1'], params = [];
@@ -101,7 +101,7 @@ router.get('/milestones', checkPermission('projects', 'view'), (req, res) => {
 });
 
 router.get('/:id', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const project = db.prepare(`SELECT p.*,u.first_name||' '||u.last_name as owner_name FROM projects p LEFT JOIN users u ON u.id=p.owner_id WHERE p.id=?`).get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Not found' });
     project.tasks = db.prepare(`SELECT t.*,u.first_name||' '||u.last_name as assignee_name FROM tasks t LEFT JOIN users u ON u.id=t.assignee_id WHERE t.project_id=? ORDER BY t.sort_order,t.created_at`).all(req.params.id);
@@ -114,7 +114,7 @@ router.get('/:id', checkPermission('projects', 'view'), (req, res) => {
 });
 
 router.post('/', checkPermission('projects', 'create'), auditLog('projects', 'CREATE_PROJECT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.name) return res.status(400).json({ error: 'Name required' });
     const code = b.code || `PRJ-${Date.now().toString(36).toUpperCase().slice(-5)}`;
@@ -123,7 +123,7 @@ router.post('/', checkPermission('projects', 'create'), auditLog('projects', 'CR
 });
 
 router.put('/:id', checkPermission('projects', 'edit'), captureOldValues('projects'), auditLog('projects', 'UPDATE_PROJECT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['name', 'description', 'status', 'priority', 'start_date', 'end_date', 'actual_start_date', 'actual_end_date', 'budget', 'actual_cost', 'progress', 'owner_id', 'department_id', 'methodology', 'is_billable', 'billing_rate', 'notes'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });
@@ -135,7 +135,7 @@ router.put('/:id', checkPermission('projects', 'edit'), captureOldValues('projec
 });
 
 router.delete('/:id', checkPermission('projects', 'delete'), auditLog('projects', 'DELETE_PROJECT'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     db.prepare('DELETE FROM time_entries WHERE project_id=?').run(req.params.id);
     db.prepare('DELETE FROM tasks WHERE project_id=?').run(req.params.id);
     db.prepare('DELETE FROM milestones WHERE project_id=?').run(req.params.id);
@@ -145,7 +145,7 @@ router.delete('/:id', checkPermission('projects', 'delete'), auditLog('projects'
 
 // === TASKS ===
 router.get('/:projectId/tasks', checkPermission('projects', 'view'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const { status, assignee_id, priority, sprint } = req.query;
     let where = ['t.project_id=?'], params = [req.params.projectId];
     if (status) { where.push("t.status=?"); params.push(status); }
@@ -159,7 +159,7 @@ router.get('/:projectId/tasks', checkPermission('projects', 'view'), (req, res) 
 });
 
 router.post('/:projectId/tasks', checkPermission('projects', 'create'), auditLog('projects', 'CREATE_TASK'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     if (!b.title) return res.status(400).json({ error: 'Title required' });
     db.prepare(`INSERT INTO tasks (id,project_id,title,description,status,priority,assignee_id,reporter_id,parent_task_id,start_date,due_date,estimated_hours,label,sprint,story_points,sort_order,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, req.params.projectId, b.title, b.description, b.status || 'todo', b.priority || 'medium', b.assignee_id, b.reporter_id || req.user.id, b.parent_task_id, b.start_date, b.due_date, b.estimated_hours || 0, b.label, b.sprint, b.story_points, b.sort_order || 0, req.user.id);
@@ -170,7 +170,7 @@ router.post('/:projectId/tasks', checkPermission('projects', 'create'), auditLog
 });
 
 router.put('/tasks/:id', checkPermission('projects', 'edit'), auditLog('projects', 'UPDATE_TASK'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const task = db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id);
     if (!task) return res.status(404).json({ error: 'Task not found' });
     const fields = ['title', 'description', 'status', 'priority', 'assignee_id', 'parent_task_id', 'start_date', 'due_date', 'estimated_hours', 'actual_hours', 'label', 'sprint', 'story_points', 'sort_order'];
@@ -187,7 +187,7 @@ router.put('/tasks/:id', checkPermission('projects', 'edit'), auditLog('projects
 });
 
 router.delete('/tasks/:id', checkPermission('projects', 'delete'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const task = db.prepare('SELECT project_id FROM tasks WHERE id=?').get(req.params.id);
     db.prepare('DELETE FROM tasks WHERE id=?').run(req.params.id);
     if (task) {
@@ -199,14 +199,14 @@ router.delete('/tasks/:id', checkPermission('projects', 'delete'), (req, res) =>
 
 // === MILESTONES ===
 router.post('/:projectId/milestones', checkPermission('projects', 'create'), auditLog('projects', 'CREATE_MILESTONE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const id = uuidv4(); const b = req.body;
     db.prepare(`INSERT INTO milestones (id,project_id,name,description,due_date,owner_id,deliverables,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(id, req.params.projectId, b.name, b.description, b.due_date, b.owner_id, b.deliverables);
     res.status(201).json(db.prepare('SELECT * FROM milestones WHERE id=?').get(id));
 });
 
 router.put('/milestones/:id', checkPermission('projects', 'edit'), auditLog('projects', 'UPDATE_MILESTONE'), (req, res) => {
-    const db = req.app.get('db');
+    const db = req.companyDb;
     const fields = ['name', 'description', 'due_date', 'status', 'owner_id', 'deliverables'];
     const updates = [], values = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f}=?`); values.push(req.body[f]); } });

@@ -39,12 +39,14 @@ export function checkPermission(module, action) {
         }
 
         // Super admin always has full access
-        if (userLevel === 1) {
+        if (req.user.isSuperAdmin || userLevel <= 1) {
             return next();
         }
 
-        // Check if this role has ANY custom permissions configured in DB
-        const db = req.app.get('db');
+        // Check if this role has ANY custom permissions configured in company DB
+        const db = req.companyDb;
+        if (!db) return next(); // No company context, fall back to hierarchy
+
         const hasCustomPerms = db.prepare(`
             SELECT COUNT(*) as count FROM role_permissions WHERE role_id = ?
         `).get(req.user.roleId);
