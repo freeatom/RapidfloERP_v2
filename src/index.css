@@ -665,7 +665,7 @@ a:hover {
 
 /* === TABLE === */
 .table-wrapper {
-    overflow-x: auto;
+    overflow: visible;
     border-radius: var(--border-radius-lg);
     border: 1px solid var(--border-color);
 }

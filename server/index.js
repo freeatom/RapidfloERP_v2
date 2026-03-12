@@ -230,7 +230,7 @@ app.use((err, req, res, next) => {
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
-    res.status(404).json({ error: 'Not found', code: 'NOT_FOUND', path: req.path });
+    res.status(404).json({ error: 'Not found', code:     'NOT_FOUND', path: req.path });
 });
 
 // =============================================
