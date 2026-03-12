@@ -228,9 +228,21 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
     res.status(404).json({ error: 'Not found', code: 'NOT_FOUND', path: req.path });
+});
+
+// =============================================
+// SERVE FRONTEND (PRODUCTION / RAILWAY)
+// =============================================
+// In production (like Railway), the Express server also serves the React built files
+const distPath = path.join(process.cwd(), 'dist');
+app.use(express.static(distPath));
+
+// For any other route, send the React index.html so React Router takes over
+app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // =============================================
