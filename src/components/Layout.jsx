@@ -181,14 +181,14 @@ export default function Layout() {
                         <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: 700 }}>Super Admin</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <button className="btn-ghost btn-icon" onClick={toggleTheme} title="Toggle Theme">
+                        <button className="btn btn-ghost btn-icon" onClick={toggleTheme} title="Toggle Theme">
                             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
                         </button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div className="avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
                             <span style={{ fontSize: 14, fontWeight: 600 }}>{user?.first_name} {user?.last_name}</span>
                         </div>
-                        <button className="btn-ghost btn-icon" onClick={async () => { await logout(); navigate('/login'); }} title="Logout"><LogOut size={18} /></button>
+                        <button className="btn btn-ghost btn-icon" onClick={async () => { await logout(); navigate('/login'); }} title="Logout"><LogOut size={18} /></button>
                     </div>
                 </div>
                 {/* Main area */}
@@ -262,7 +262,7 @@ export default function Layout() {
                 <div className="sidebar-logo">
                     <img src={logo} alt="Logo" className="logo-icon" />
                     {!collapsed && <h1>Rapidflo</h1>}
-                    <button className="btn-ghost btn-icon" onClick={() => { setCollapsed(!collapsed); setMobileOpen(false); }} style={{ marginLeft: 'auto' }}>
+                    <button className="btn btn-ghost btn-icon" onClick={() => { setCollapsed(!collapsed); setMobileOpen(false); }} style={{ marginLeft: 'auto' }}>
                         <ChevronLeft size={18} style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'var(--transition)' }} />
                     </button>
                 </div>
@@ -315,7 +315,7 @@ export default function Layout() {
             <div className="main-content">
                 <header className="topbar">
                     <div className="topbar-left">
-                        <button className="btn-ghost btn-icon" onClick={() => setMobileOpen(true)} style={{ display: 'none' }}>
+                        <button className="btn btn-ghost btn-icon" onClick={() => setMobileOpen(true)} style={{ display: 'none' }}>
                             <Menu size={20} />
                         </button>
                         <div>
@@ -430,7 +430,7 @@ export default function Layout() {
                         </div>
                         {/* Notifications */}
                         <div style={{ position: 'relative' }}>
-                            <button className="btn-ghost btn-icon" onClick={() => setShowNotifs(!showNotifs)}>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowNotifs(!showNotifs)}>
                                 <Bell size={20} />
                                 {unreadCount > 0 && <span className="nav-badge" style={{ position: 'absolute', top: 2, right: 2, minWidth: 16, textAlign: 'center' }}>{unreadCount}</span>}
                             </button>
@@ -439,8 +439,8 @@ export default function Layout() {
                                     <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--border-color)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span>Notifications</span>
                                         <div style={{ display: 'flex', gap: 6 }}>
-                                            {unreadCount > 0 && <button className="btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: 'var(--color-primary)' }} onClick={async () => { try { await api('/notifications/read-all', { method: 'PUT' }); setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 }))); } catch { } }}>Mark All Read</button>}
-                                            <button className="btn-ghost btn-sm" onClick={() => setShowNotifs(false)}>✕</button>
+                                            {unreadCount > 0 && <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: 'var(--color-primary)' }} onClick={async () => { try { await api('/notifications/read-all', { method: 'PUT' }); setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 }))); } catch { } }}>Mark All Read</button>}
+                                            <button className="btn btn-ghost btn-sm" onClick={() => setShowNotifs(false)}>✕</button>
                                         </div>
                                     </div>
                                     {notifications.length === 0 ? (
@@ -456,16 +456,22 @@ export default function Layout() {
                         </div>
                         {/* User */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }} onClick={() => navigate('/profile')} title="My Profile">
-                            <div className="avatar">{user?.first_name?.[0]}{user?.last_name?.[0]}</div>
+                            <div className="avatar" style={{ overflow: 'hidden' }}>
+                                {user?.avatar ? (
+                                    <img src={user.avatar} alt="User Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    <>{user?.firstName?.[0]}{user?.lastName?.[0]}</>
+                                )}
+                            </div>
                             <div style={{ lineHeight: 1.3 }}>
-                                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{user?.first_name} {user?.last_name}</div>
-                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{user?.role_name}</div>
+                                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{user?.firstName} {user?.lastName}</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{user?.role}</div>
                             </div>
                         </div>
-                        <button className="btn-ghost btn-icon" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+                        <button className="btn btn-ghost btn-icon" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
                         </button>
-                        <button className="btn-ghost btn-icon" onClick={logout} title="Logout"><LogOut size={18} /></button>
+                        <button className="btn btn-ghost btn-icon" onClick={logout} title="Logout"><LogOut size={18} /></button>
                     </div>
                 </header>
 

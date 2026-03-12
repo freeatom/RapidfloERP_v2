@@ -8,7 +8,6 @@ async function api(path, options = {}) {
     const companyId = localStorage.getItem('erp_company_id');
     const config = {
         headers: {
-            'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...(companyId ? { 'X-Company-Id': companyId } : {}),
             ...options.headers
@@ -16,6 +15,7 @@ async function api(path, options = {}) {
         ...options,
     };
     if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
+        config.headers['Content-Type'] = 'application/json';
         config.body = JSON.stringify(config.body);
     }
     const res = await fetch(`${API}${path}`, config);
@@ -87,8 +87,15 @@ function AuthProvider({ children }) {
         setUser(null);
     };
 
+    const updateUser = (updates) => {
+        if (!user) return;
+        const newUser = { ...user, ...updates };
+        setUser(newUser);
+        localStorage.setItem('erp_user', JSON.stringify(newUser));
+    };
+
     if (loading) return <div className="loading-overlay"><div className="spinner"></div><span>Loading Rapidflo...</span></div>;
-    return <AuthContext.Provider value={{ user, login, logout, switchCompany, enterCompany, exitCompany, isAuth: !!user }}>{children}</AuthContext.Provider>;
+    return <AuthContext.Provider value={{ user, login, logout, switchCompany, enterCompany, exitCompany, updateUser, isAuth: !!user }}>{children}</AuthContext.Provider>;
 }
 
 // === Toast Context ===

@@ -74,6 +74,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api', apiLimiter);
 
+// Serve static uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // Request ID and timing
 app.use((req, res, next) => {
     req.requestId = req.headers['x-request-id'] || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -172,13 +175,13 @@ app.get('/api/search', authMiddleware, tenantMiddleware, (req, res) => {
     if (!q || q.length < 2) return res.json({ results: [] });
     const s = `%${q}%`;
     const results = [];
-    try { results.push(...cdb.prepare("SELECT id, first_name || ' ' || last_name as name, email, 'lead' as type, 'crm' as module FROM leads WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? LIMIT 5").all(s, s, s)); } catch {}
-    try { results.push(...cdb.prepare("SELECT id, first_name || ' ' || last_name as name, email, 'contact' as type, 'crm' as module FROM contacts WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? LIMIT 5").all(s, s, s)); } catch {}
-    try { results.push(...cdb.prepare("SELECT id, name, email, 'account' as type, 'crm' as module FROM accounts WHERE name LIKE ? OR email LIKE ? LIMIT 5").all(s, s)); } catch {}
-    try { results.push(...cdb.prepare("SELECT id, name, sku as email, 'product' as type, 'sales' as module FROM products WHERE name LIKE ? OR sku LIKE ? LIMIT 5").all(s, s)); } catch {}
-    try { results.push(...cdb.prepare("SELECT id, first_name || ' ' || last_name as name, email, 'employee' as type, 'hrms' as module FROM employees WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? LIMIT 5").all(s, s, s)); } catch {}
-    try { results.push(...cdb.prepare("SELECT id, subject as name, ticket_number as email, 'ticket' as type, 'support' as module FROM tickets WHERE subject LIKE ? OR ticket_number LIKE ? LIMIT 5").all(s, s)); } catch {}
-    try { results.push(...cdb.prepare("SELECT id, name, code as email, 'project' as type, 'projects' as module FROM projects WHERE name LIKE ? OR code LIKE ? LIMIT 5").all(s, s)); } catch {}
+    try { results.push(...cdb.prepare("SELECT id, first_name || ' ' || last_name as name, email, 'lead' as type, 'crm' as module FROM leads WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? LIMIT 5").all(s, s, s)); } catch { }
+    try { results.push(...cdb.prepare("SELECT id, first_name || ' ' || last_name as name, email, 'contact' as type, 'crm' as module FROM contacts WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? LIMIT 5").all(s, s, s)); } catch { }
+    try { results.push(...cdb.prepare("SELECT id, name, email, 'account' as type, 'crm' as module FROM accounts WHERE name LIKE ? OR email LIKE ? LIMIT 5").all(s, s)); } catch { }
+    try { results.push(...cdb.prepare("SELECT id, name, sku as email, 'product' as type, 'sales' as module FROM products WHERE name LIKE ? OR sku LIKE ? LIMIT 5").all(s, s)); } catch { }
+    try { results.push(...cdb.prepare("SELECT id, first_name || ' ' || last_name as name, email, 'employee' as type, 'hrms' as module FROM employees WHERE first_name LIKE ? OR last_name LIKE ? OR email LIKE ? LIMIT 5").all(s, s, s)); } catch { }
+    try { results.push(...cdb.prepare("SELECT id, subject as name, ticket_number as email, 'ticket' as type, 'support' as module FROM tickets WHERE subject LIKE ? OR ticket_number LIKE ? LIMIT 5").all(s, s)); } catch { }
+    try { results.push(...cdb.prepare("SELECT id, name, code as email, 'project' as type, 'projects' as module FROM projects WHERE name LIKE ? OR code LIKE ? LIMIT 5").all(s, s)); } catch { }
     res.json({ results });
 });
 

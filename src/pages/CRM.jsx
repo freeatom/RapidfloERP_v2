@@ -13,8 +13,8 @@ const SCORE_LABEL = { hot: { color: '#ef4444', icon: '🔥', bg: 'rgba(239,68,68
 // Follow-up display helper
 function followUpLabel(dateStr) {
     if (!dateStr) return null;
-    const today = new Date(); today.setHours(0,0,0,0);
-    const fDate = new Date(dateStr); fDate.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const fDate = new Date(dateStr); fDate.setHours(0, 0, 0, 0);
     const diff = Math.round((fDate - today) / 86400000);
     if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, color: '#ef4444', overdue: true };
     if (diff === 0) return { text: 'Today', color: '#f59e0b', overdue: false };
@@ -72,7 +72,7 @@ export default function CRMPage() {
 
     // Fetch team users once for assigned_to dropdowns
     useEffect(() => {
-        api('/crm/users').then(u => setTeamUsers(Array.isArray(u) ? u : [])).catch(() => {});
+        api('/crm/users').then(u => setTeamUsers(Array.isArray(u) ? u : [])).catch(() => { });
     }, []);
 
     // Smooth tab transition
@@ -117,12 +117,14 @@ export default function CRMPage() {
             // Auto-create contact when lead becomes qualified or converted
             if ((newStatus === 'qualified' || newStatus === 'converted') && item.status !== 'qualified' && item.status !== 'converted') {
                 try {
-                    await api('/crm/contacts', { method: 'POST', body: {
-                        first_name: item.first_name, last_name: item.last_name,
-                        email: item.email, phone: item.phone,
-                        job_title: item.job_title || '', lead_source: item.source || '',
-                        notes: `Auto-created from lead (${newStatus})`
-                    }});
+                    await api('/crm/contacts', {
+                        method: 'POST', body: {
+                            first_name: item.first_name, last_name: item.last_name,
+                            email: item.email, phone: item.phone,
+                            job_title: item.job_title || '', lead_source: item.source || '',
+                            notes: `Auto-created from lead (${newStatus})`
+                        }
+                    });
                     toast(`Lead → ${newStatus} + Contact created`, 'success');
                 } catch { toast(`Lead → ${newStatus} (contact may already exist)`, 'success'); }
             } else {
@@ -169,10 +171,12 @@ export default function CRMPage() {
     // Convert lead to opportunity
     const convertLead = async (item) => {
         try {
-            await api(`/crm/leads/${item.id}/convert`, { method: 'POST', body: {
-                name: `${item.company || item.first_name} Deal`,
-                amount: 0
-            }});
+            await api(`/crm/leads/${item.id}/convert`, {
+                method: 'POST', body: {
+                    name: `${item.company || item.first_name} Deal`,
+                    amount: 0
+                }
+            });
             toast('Lead converted to deal + contact + account', 'success');
             fetchData(true);
         } catch (err) { toast(err.message, 'error'); }
@@ -302,35 +306,36 @@ export default function CRMPage() {
                                                 const fl = followUpLabel(item.next_follow_up);
                                                 const sl = SCORE_LABEL[item.score_label] || SCORE_LABEL.cold;
                                                 return <>
-                                                <td style={{ fontWeight: 500 }}>
-                                                    <div>{item.first_name} {item.last_name}</div>
-                                                    {item.job_title && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>{item.job_title}</div>}
-                                                </td>
-                                                <td>{item.company || <span className="text-muted">—</span>}</td>
-                                                <td style={{ fontSize: '0.85rem' }}>{item.phone || <span className="text-muted">—</span>}</td>
-                                                <td>
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600, background: sl.bg, color: sl.color }}>
-                                                        <span>{sl.icon}</span>{item.score_label || 'cold'}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <StatusBadge item={item} statuses={LEAD_STATUSES} colorMap={STATUS_COLORS} onSelect={changeLeadStatus} />
-                                                </td>
-                                                <td>
-                                                    {fl ? (
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: fl.overdue ? 600 : 500, color: fl.color }}>
-                                                            {fl.overdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                                                            {fl.text}
+                                                    <td style={{ fontWeight: 500 }}>
+                                                        <div>{item.first_name} {item.last_name}</div>
+                                                        {item.job_title && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>{item.job_title}</div>}
+                                                    </td>
+                                                    <td>{item.company || <span className="text-muted">—</span>}</td>
+                                                    <td style={{ fontSize: '0.85rem' }}>{item.phone || <span className="text-muted">—</span>}</td>
+                                                    <td>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600, background: sl.bg, color: sl.color }}>
+                                                            <span>{sl.icon}</span>{item.score_label || 'cold'}
                                                         </span>
-                                                    ) : <span className="text-muted" style={{ fontSize: '0.78rem' }}>—</span>}
-                                                </td>
-                                                <td style={{ fontSize: '0.8rem' }}>{item.assigned_to_name || <span className="text-muted">—</span>}</td>
-                                                <td><div style={{ display: 'flex', gap: 2 }}>
-                                                    {item.status !== 'converted' && <button className="btn btn-ghost btn-sm btn-icon" onClick={() => convertLead(item)} title="Convert to deal"><ArrowRightCircle size={14} color="#10b981" /></button>}
-                                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { setEditItem(item); setForm({ ...item }); setShowModal(true); }} title="Edit"><Edit2 size={14} /></button>
-                                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => handleDelete(item.id)} title="Delete"><Trash2 size={14} /></button>
-                                                </div></td>
-                                            </>; })()}
+                                                    </td>
+                                                    <td>
+                                                        <StatusBadge item={item} statuses={LEAD_STATUSES} colorMap={STATUS_COLORS} onSelect={changeLeadStatus} />
+                                                    </td>
+                                                    <td>
+                                                        {fl ? (
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: fl.overdue ? 600 : 500, color: fl.color }}>
+                                                                {fl.overdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                                                                {fl.text}
+                                                            </span>
+                                                        ) : <span className="text-muted" style={{ fontSize: '0.78rem' }}>—</span>}
+                                                    </td>
+                                                    <td style={{ fontSize: '0.8rem' }}>{item.assigned_to_name || <span className="text-muted">—</span>}</td>
+                                                    <td><div style={{ display: 'flex', gap: 2 }}>
+                                                        {item.status !== 'converted' && <button className="btn btn-ghost btn-sm btn-icon" onClick={() => convertLead(item)} title="Convert to deal"><ArrowRightCircle size={14} color="#10b981" /></button>}
+                                                        <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { setEditItem(item); setForm({ ...item }); setShowModal(true); }} title="Edit"><Edit2 size={14} /></button>
+                                                        <button className="btn btn-ghost btn-sm btn-icon" onClick={() => handleDelete(item.id)} title="Delete"><Trash2 size={14} /></button>
+                                                    </div></td>
+                                                </>;
+                                            })()}
                                             {/* === CONTACTS === */}
                                             {tab === 'contacts' && <>
                                                 <td style={{ fontWeight: 500 }}>{item.first_name} {item.last_name}</td>
@@ -456,7 +461,7 @@ export default function CRMPage() {
                                 <div className="form-group"><label className="form-label">Deal Name <span className="required">*</span></label><input className="form-input" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
                                 <div className="form-row">
                                     <div className="form-group"><label className="form-label">Amount (₹)</label><input type="number" className="form-input" value={form.amount || ''} onChange={e => setForm({ ...form, amount: +e.target.value })} /></div>
-                                    <div className="form-group"><label className="form-label">Stage</label><select className="form-select" value={form.stage || 'prospecting'} onChange={e => setForm({ ...form, stage: e.target.value })}>{OPP_STAGES.map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}</select></div>
+                                    <div className="form-group"><label className="form-label">Stage</label><select className="form-select" value={form.stage || 'prospecting'} onChange={e => setForm({ ...form, stage: e.target.value })}>{OPP_STAGES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></div>
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group"><label className="form-label">Close Date</label><input type="date" className="form-input" value={form.expected_close_date || ''} onChange={e => setForm({ ...form, expected_close_date: e.target.value })} /></div>
